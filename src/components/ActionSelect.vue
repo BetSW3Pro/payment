@@ -1,0 +1,108 @@
+<script setup lang="ts">
+interface ActionOption {
+  id: string
+  title: string
+  description: string
+  accent: string
+  icon: 'down' | 'up'
+}
+
+const props = defineProps<{
+  actions: ActionOption[]
+  selectedId: string | null
+}>()
+
+const emit = defineEmits<{
+  select: [id: string]
+}>()
+
+const handleSelect = (id: string) => {
+  emit('select', id)
+}
+</script>
+
+<template>
+  <div class="grid">
+    <button
+      v-for="action in props.actions"
+      :key="action.id"
+      type="button"
+      class="action-card"
+      :class="{ active: props.selectedId === action.id }"
+      :style="{ boxShadow: `0 16px 36px ${action.accent}25, inset 0 1px 0 rgba(255,255,255,0.6)` }"
+      @click="handleSelect(action.id)"
+    >
+      <div class="icon" :class="action.icon" :style="{ color: action.accent }">
+        <span v-if="action.icon === 'down'">↓</span>
+        <span v-else>↑</span>
+      </div>
+      <div class="copy">
+        <p class="title">{{ action.title }}</p>
+        <p class="description">{{ action.description }}</p>
+      </div>
+    </button>
+  </div>
+</template>
+
+<style scoped>
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.action-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(245, 247, 255, 0.9));
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+  text-align: left;
+  color: #0f172a;
+}
+
+.action-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(63, 131, 248, 0.35);
+}
+
+.action-card.active {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.02), rgba(63, 131, 248, 0.08));
+  border-color: rgba(63, 131, 248, 0.35);
+}
+
+.icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.05);
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.description {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+</style>
