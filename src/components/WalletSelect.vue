@@ -1,22 +1,19 @@
 <script setup lang="ts">
 interface WalletOption {
-  id: string
+  id: number
   name: string
-  subtitle: string
-  badge: string
-  accent: string
 }
 
 const props = defineProps<{
   wallets: WalletOption[]
-  selectedId: string | null
+  selectedId: number | null
 }>()
 
 const emit = defineEmits<{
-  select: [id: string]
+  select: [id: number]
 }>()
 
-const handleSelect = (id: string) => {
+const handleSelect = (id: number) => {
   emit('select', id)
 }
 </script>
@@ -31,12 +28,15 @@ const handleSelect = (id: string) => {
       :class="{ active: props.selectedId === wallet.id }"
       @click="handleSelect(wallet.id)"
     >
-      <div class="badge" :style="{ background: wallet.accent }">
-        <span>{{ wallet.badge }}</span>
+      <div
+        class="badge"
+        :style="{ background:'linear-gradient(135deg, #d9e8ff, #bcd1ff)' }"
+      >
+        <span>{{ wallet.name?.[0]?.toUpperCase() ?? '?' }}</span>
       </div>
       <div class="content">
         <p class="title">{{ wallet.name }}</p>
-        <p class="subtitle">{{ wallet.subtitle }}</p>
+        <!-- <p class="subtitle">{{ wallet.subtitle }}</p> -->
       </div>
       <div class="chevron">›</div>
     </button>

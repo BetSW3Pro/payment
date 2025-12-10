@@ -2,19 +2,29 @@
 import { defineStore } from 'pinia'
 import { api } from '@/api/axios'
 
-interface Wallet {
+export interface Wallet {
   id: number
   name: string
   // agrega los campos reales que devuelva tu API
 }
 
+interface WalletState {
+  plataformId: number | null
+  token: string
+  wallets: Wallet[]
+  loading: boolean
+  error: string | null
+  methods:Wallet[]
+}
+
 export const useWalletStore = defineStore('wallets', {
-  state: () => ({
-    plataformId: null as number | null,
-    token: '' as string,
+  state: (): WalletState => ({
+    plataformId: null,
+    token: '',
     wallets: [],
     loading: false,
-    error: null as string | null,
+    error: null,
+    methods:[]
   }),
   actions: {
     setAuth(plataformId: number, token: string) {
@@ -33,9 +43,9 @@ export const useWalletStore = defineStore('wallets', {
           plataformId: this.plataformId,
           token: this.token,
         })
-        console.log(res)
-        this.wallets = res.data
-        console.log(this.wallets)
+        this.wallets = res.data.data.wallets
+        this.methods= res.data.data.wallets[0].paymetsMethods
+        console.log("ale",this.methods)
       } catch (err: any) {
         this.error = err?.response?.data?.message ?? err?.message ?? 'Error desconocido'
       } finally {

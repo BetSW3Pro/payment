@@ -13,36 +13,37 @@ type Step = 'wallet' | 'action' | 'method' | 'form'
 const route = useRoute()
 const walletStore = useWalletStore() 
 
-const wallets = [
-  {
-    id: 'tonder',
-    name: 'Tonder',
-    subtitle: 'Billetera principal',
-    badge: 'T',
-    accent: 'linear-gradient(135deg, #d9e8ff, #bcd1ff)',
-  },
-  {
-    id: 'nequi',
-    name: 'Nequi',
-    subtitle: 'Pagos al instante',
-    badge: 'N',
-    accent: 'linear-gradient(135deg, #ffdce6, #f7bbff)',
-  },
-  {
-    id: 'bank',
-    name: 'Otra Billetera',
-    subtitle: 'Transferencia segura',
-    badge: 'B',
-    accent: 'linear-gradient(135deg, #e0f8ef, #c3eddc)',
-  },
-  {
-    id: 'new',
-    name: 'Agregar Nueva',
-    subtitle: 'Conecta en segundos',
-    badge: '+',
-    accent: 'linear-gradient(135deg, #fef3c7, #fde68a)',
-  },
-]
+// const wallets = [
+//   {
+//     id: 'tonder',
+//     name: 'Tonder',
+//     subtitle: 'Billetera principal',
+//     badge: 'T',
+//     accent: 'linear-gradient(135deg, #d9e8ff, #bcd1ff)',
+//   },
+//   {
+//     id: 'nequi',
+//     name: 'Nequi',
+//     subtitle: 'Pagos al instante',
+//     badge: 'N',
+//     accent: 'linear-gradient(135deg, #ffdce6, #f7bbff)',
+//   },
+//   {
+//     id: 'bank',
+//     name: 'Otra Billetera',
+//     subtitle: 'Transferencia segura',
+//     badge: 'B',
+//     accent: 'linear-gradient(135deg, #e0f8ef, #c3eddc)',
+//   },
+//   {
+//     id: 'new',
+//     name: 'Agregar Nueva',
+//     subtitle: 'Conecta en segundos',
+//     badge: '+',
+//     accent: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+//   },
+// ]
+const storeWallets = computed(() => walletStore.wallets)
 
 const actions = [
   {
@@ -84,7 +85,8 @@ const methods = [
     accent: '#0ea5e9',
   },
 ]
-
+const storemethods = computed(() => walletStore.methods)
+console.log("r",storemethods)
 onMounted(() => {
   const token = (route.query.token as string) || ''
   const plataformId = Number(route.query.plataformId || route.query.platformId)
@@ -108,9 +110,9 @@ watch(
 )
 
 const step = ref<Step>('wallet')
-const selectedWallet = ref<string | null>(wallets[0]?.id ?? null)
+const selectedWallet = ref<number | null>(storeWallets.value[0]?.id ?? null)
 const selectedAction = ref<string | null>(null)
-const selectedMethod = ref<string | null>(null)
+const selectedMethod = ref<number | null>(null)
 
 const stepOrder = computed<Step[]>(() =>
   selectedAction.value === 'withdraw'
@@ -118,8 +120,8 @@ const stepOrder = computed<Step[]>(() =>
     : ['wallet', 'action', 'method', 'form'],
 )
 
-const currentWallet = computed(() => wallets.find((wallet) => wallet.id === selectedWallet.value))
-const currentMethod = computed(() => methods.find((method) => method.id === selectedMethod.value))
+const currentWallet = computed(() => storeWallets.value.find((wallet) => wallet.id === selectedWallet.value))
+const currentMethod = computed(() => storemethods.value.find((method) => method.id === selectedMethod.value))
 
 const stepTitle = computed(() => {
   if (step.value === 'action') {
@@ -138,7 +140,7 @@ const methodLabel = computed(() => {
   if (selectedAction.value === 'withdraw') {
     return 'Retiro'
   }
-  return currentMethod.value?.title ?? 'Metodo'
+  return currentMethod.value?.name ?? 'Metodo'
 })
 
 const stepPosition = computed(() => stepOrder.value.indexOf(step.value) + 1)
@@ -146,12 +148,13 @@ const totalSteps = computed(() => stepOrder.value.length)
 
 const goPrevStep = () => {
   const idx = stepOrder.value.indexOf(step.value)
-  if (idx > 0) {
-    step.value = stepOrder.value[idx - 1]
+  const prevStep = stepOrder.value[idx - 1]
+  if (prevStep) {
+    step.value = prevStep
   }
 }
 
-const selectWallet = (id: string) => {
+const selectWallet = (id: number) => {
   selectedWallet.value = id
   selectedAction.value = null
   selectedMethod.value = null
@@ -164,7 +167,7 @@ const selectAction = (id: string) => {
   step.value = id === 'withdraw' ? 'form' : 'method'
 }
 
-const selectMethod = (id: string) => {
+const selectMethod = (id: number) => {
   selectedMethod.value = id
   step.value = 'form'
 }
@@ -175,7 +178,7 @@ const handleSubmit = (payload: { amount: number; fullName: string; email: string
     ...payload,
     wallet: currentWallet.value?.name ?? 'N/D',
     action: selectedAction.value,
-    method: selectedAction.value === 'withdraw' ? 'Retiro' : currentMethod.value?.title ?? 'N/D',
+    method: selectedAction.value === 'withdraw' ? 'Retiro' : currentMethod.value?.name ?? 'N/D',
   })
   alert('Pago generado (demo). Conecta tu backend para completar el flujo.')
 }
@@ -210,7 +213,7 @@ const handleSubmit = (payload: { amount: number; fullName: string; email: string
       <div class="content">
         <WalletSelect
           v-if="step === 'wallet'"
-          :wallets="wallets"
+          :wallets="storeWallets"
           :selected-id="selectedWallet"
           @select="selectWallet"
         />
@@ -224,7 +227,7 @@ const handleSubmit = (payload: { amount: number; fullName: string; email: string
 
         <PaymentMethodSelect
           v-else-if="step === 'method'"
-          :methods="methods"
+          :methods="storemethods"
           :selected-id="selectedMethod"
           @select="selectMethod"
         />
