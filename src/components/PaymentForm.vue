@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 
 const props = defineProps<{
   methodLabel: string
   walletLabel: string
+  loading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,7 +23,14 @@ const form = reactive({
   email: '',
 })
 
+const isFormValid = computed(() => {
+  const amount = Number(form.amount)
+  return Boolean(amount > 0 && form.fullName.trim().length > 0 && form.email.trim().length > 0)
+})
+
 const handleSubmit = () => {
+  if (!isFormValid.value || props.loading) return
+
   emit('submit', {
     amount: Number(form.amount || 0),
     fullName: form.fullName.trim(),
@@ -53,7 +61,10 @@ const handleSubmit = () => {
       <input v-model="form.email" required type="email" placeholder="ejemplo@email.com" />
     </label>
 
-    <button type="submit" class="cta">Generar Pago</button>
+    <button type="submit" class="cta" :disabled="!isFormValid || props.loading">
+      <span v-if="props.loading" class="spinner" aria-hidden="true" />
+      <span>{{ props.loading ? 'Generando...' : 'Generar Pago' }}</span>
+    </button>
   </form>
 </template>
 
@@ -140,6 +151,10 @@ const handleSubmit = () => {
   box-shadow:
     0 14px 32px rgba(37, 99, 235, 0.35),
     0 6px 12px rgba(37, 99, 235, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 .cta:hover {
@@ -149,5 +164,32 @@ const handleSubmit = () => {
 
 .cta:active {
   transform: translateY(0);
+}
+
+.cta:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.cta .spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  display: inline-block;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

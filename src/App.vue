@@ -89,6 +89,7 @@ const step = ref<Step>('wallet')
 const selectedWallet = ref<number | null>(storeWallets.value[0]?.id ?? null)
 const selectedAction = ref<string | null>(null)
 const selectedMethod = ref<number | null>(null)
+const isSubmitting = ref(false)
 
 const stepOrder = computed<Step[]>(() =>
   selectedAction.value === 'withdraw'
@@ -149,6 +150,8 @@ const selectMethod = (id: number) => {
 }
 
 const handleSubmit = async (payload: { amount: number; fullName: string; email: string }) => {
+  if (isSubmitting.value) return
+
   if (selectedAction.value === "withdraw") {
     alert("El flujo de retiro aun no esta implementado.")
     return
@@ -158,6 +161,7 @@ const handleSubmit = async (payload: { amount: number; fullName: string; email: 
     return
   }
 
+  isSubmitting.value = true
   const body = {
     clientId: Number((walletStore as any).user?.id ?? route.query.clientId ?? 0),
     walletId: Number(selectedWallet.value ?? walletStore.wallets[0]?.id ?? 0),
@@ -191,6 +195,8 @@ const handleSubmit = async (payload: { amount: number; fullName: string; email: 
   } catch (err) {
     console.error('Error al generar la transaccion o iniciar el pago:', err)
     alert('Hubo un error creando la transaccion o iniciando el pago.')
+  } finally {
+    isSubmitting.value = false
   }
 }
 </script>
@@ -226,7 +232,7 @@ const handleSubmit = async (payload: { amount: number; fullName: string; email: 
           @select="selectMethod" />
 
         <PaymentForm v-else :method-label="methodLabel" :wallet-label="currentWallet?.name ?? 'Billetera'"
-          @submit="handleSubmit" />
+          :loading="isSubmitting" @submit="handleSubmit" />
       </div>
     </section>
   </main>
@@ -374,4 +380,3 @@ h1 {
   }
 }
 </style>
-
