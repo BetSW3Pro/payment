@@ -1,7 +1,8 @@
 /* Tonder SDK Lite helpers en TypeScript */
-// Se asume que el script de TonderSdk está incluido vía CDN y expone window.TonderSdk
+// Se asume que el script de TonderSdk esta incluido via CDN y expone window.TonderSdk
 
 export type PaymentMethodId = 'Oxxo' | 'SPEI' | 'Efectivo'
+type RedirectMode = 'same-tab' | 'new-tab'
 
 type BrowserInfo = {
   javascript_enabled: boolean
@@ -115,21 +116,42 @@ const TONDER_CONFIG = {
   returnUrl: 'https://tonder.live/customer/sdklite-migallo/',
 }
 
-const PAYMENT_METHOD_MAP: Record<PaymentMethodId, string> = {
-  Oxxo: 'oxxopay',
-  SPEI: 'spei',
-  Efectivo: 'cash',
+type PaymentMethodConfig = {
+  value: string
+  redirectMode?: RedirectMode
+}
+
+const PAYMENT_METHOD_MAP: Record<string, PaymentMethodConfig> = {
+  oxxo: { value: 'oxxopay' },
+  oxxopay: { value: 'oxxopay' },
+  spei: { value: 'Spei', redirectMode: 'same-tab' },
+  efectivo: { value: 'cash' },
+  cash: { value: 'cash' },
 }
 
 let liteCheckout: LiteInlineCheckout | null = null
 let scriptsLoaded = false
+
+const resolvePaymentMethod = (methodId: string | number | undefined): PaymentMethodConfig => {
+  const key =
+    typeof methodId === 'string'
+      ? methodId.trim().toLowerCase()
+      : typeof methodId === 'number'
+        ? String(methodId)
+        : ''
+
+  const mapped = key ? PAYMENT_METHOD_MAP[key] : undefined
+  if (mapped) return mapped
+
+  return { value: methodId ? String(methodId) : 'oxxopay' }
+}
 
 const loadScript = (src: string) =>
   new Promise<void>((resolve, reject) => {
     const script = document.createElement('script')
     script.src = src
     script.onload = () => resolve()
-    script.onerror = () => reject(new Error("No se pudo cargar el script " + src))
+    script.onerror = () => reject(new Error('No se pudo cargar el script ' + src))
     document.head.appendChild(script)
   })
 
@@ -152,12 +174,18 @@ const getBrowserInfo = (): BrowserInfo => ({
   user_agent: navigator.userAgent,
 })
 
+const waitForTonderSdk = async (retries = 40, delayMs = 100): Promise<LiteInlineCheckoutCtor> => {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    const ctor = window.TonderSdk?.LiteInlineCheckout
+    if (ctor) return ctor
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+  }
+  throw new Error('Tonder SDK Lite no esta disponible. Asegurate de cargar el script de TonderSdk.')
+}
+
 const ensureLiteCheckout = async (): Promise<LiteInlineCheckout> => {
   await loadExternalScripts()
-  const ctor = window.TonderSdk?.LiteInlineCheckout
-  if (!ctor) {
-    throw new Error('Tonder SDK Lite no está disponible. Asegúrate de cargar el script de TonderSdk.')
-  }
+  const ctor = await waitForTonderSdk()
   if (!liteCheckout) {
     liteCheckout = new ctor({
       mode: TONDER_CONFIG.mode,
@@ -209,7 +237,7 @@ const buildPaymentPayload = (params: {
       email: params.email,
       country: 'Mexico',
       address: 'Calle Principal 123',
-      city: 'Ciudad de México',
+      city: 'Ciudad de Mexico',
       state: 'CDMX',
       postCode: '01000',
       phone: '3025551234',
@@ -228,6 +256,7 @@ const buildPaymentPayload = (params: {
       operation_date: new Date().toISOString(),
       customer_email: params.email,
       customer_id: params.customerId,
+      business_user: 'tonder_user',
     },
     order_reference: orderReference,
     order_id: orderId,
@@ -254,7 +283,7 @@ const buildPaymentPayload = (params: {
   }
 }
 
-const handlePaymentResponse = (response: TonderPaymentResponse) => {
+const handlePaymentResponse = (response: TonderPaymentResponse, options?: { redirectMode?: RedirectMode }) => {
   if (response.status === 500) {
     throw new Error(response.message || 'Error del proveedor. Intenta nuevamente.')
   }
@@ -269,8 +298,12 @@ const handlePaymentResponse = (response: TonderPaymentResponse) => {
     response.redirect_url
 
   if (redirectUrl) {
-    window.open(redirectUrl, '_blank')
-    return 'Redirigiendo a la página de pago...'
+    if (options?.redirectMode === 'same-tab') {
+      window.location.href = redirectUrl
+    } else {
+      window.open(redirectUrl, '_blank')
+    }
+    return 'Redirigiendo a la pagina de pago...'
   }
 
   if (response.reference || response.payment_reference) {
@@ -281,7 +314,7 @@ const handlePaymentResponse = (response: TonderPaymentResponse) => {
     return `Pago procesado. Checkout ID: ${response.checkout_id}`
   }
 
-  return 'Pago procesado. Revisa la consola para más detalles.'
+  return 'Pago procesado. Revisa la consola para mas detalles.'
 }
 
 export const processTonderPayment = async (params: {
@@ -292,6 +325,12 @@ export const processTonderPayment = async (params: {
   customerId: string
   currency?: string
 }) => {
+  const paymentMethod = resolvePaymentMethod(params.methodId)
+
+  if (paymentMethod.value.toLowerCase() === 'spei' && params.amount < 10) {
+    throw new Error('Monto minimo para SPEI: $10 MXN')
+  }
+
   const checkout = await ensureLiteCheckout()
   const { firstName, lastName } = splitName(params.fullName)
 
@@ -308,12 +347,11 @@ export const processTonderPayment = async (params: {
     firstName,
     lastName,
     email: params.email,
-    paymentMethod: params.methodId,
+    paymentMethod: paymentMethod.value,
     customerId: params.customerId,
     currency: params.currency || 'MXN',
   })
 
   const response = await checkout.payment(payload)
-  return handlePaymentResponse(response)
+  return handlePaymentResponse(response, { redirectMode: paymentMethod.redirectMode ?? 'new-tab' })
 }
-

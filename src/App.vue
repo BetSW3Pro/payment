@@ -7,7 +7,7 @@ import WalletSelect from './components/WalletSelect.vue'
 import { useRoute } from 'vue-router'
 import { useWalletStore } from '@/stores/wallets'
 import { useTransactionsStore } from '@/stores/transactions'
-import { processTonderPayment} from '@/services/tonder'
+import { processTonderPayment } from '@/services/tonder'
 
 
 type Step = 'wallet' | 'action' | 'method' | 'form'
@@ -120,6 +120,29 @@ const methodLabel = computed(() => {
   return currentMethod.value?.name ?? 'Metodo'
 })
 
+const resolveTonderMethodId = () => {
+  const method = currentMethod.value as any
+  const rawValue =
+    method?.tonderMethod ??
+    method?.tonder_method ??
+    method?.paymentMethod ??
+    method?.payment_method ??
+    method?.code ??
+    method?.slug ??
+    method?.name ??
+    method?.id
+
+  const raw = rawValue !== undefined && rawValue !== null ? String(rawValue) : ''
+  const normalized = raw.toLowerCase()
+
+  console.log(raw)
+  if (normalized.includes('spei')) return 'spei'
+  if (normalized.includes('oxxo')) return 'oxxopay'
+  if (normalized.includes('cash') || normalized.includes('efectivo')) return 'cash'
+
+  return raw || 'oxxopay'
+}
+
 const stepPosition = computed(() => stepOrder.value.indexOf(step.value) + 1)
 const totalSteps = computed(() => stepOrder.value.length)
 
@@ -178,7 +201,7 @@ const handleSubmit = async (payload: { amount: number; fullName: string; email: 
       amount: payload.amount,
       fullName: payload.fullName,
       email: payload.email,
-      methodId: "oxxopay",
+      methodId: resolveTonderMethodId(),
       customerId: String(customerId),
       currency: (route.query.currency as string) || "MXN",
     })
