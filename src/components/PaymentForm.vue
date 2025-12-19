@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive,computed } from 'vue'
+import { reactive, computed, ref } from 'vue'
 
 const props = defineProps<{
   methodLabel: string
@@ -7,12 +7,19 @@ const props = defineProps<{
   loading?:boolean
 }>()
 
+type StoreInfo = {
+  id: string
+  name: string
+  channel: string
+}
+
 const emit = defineEmits<{
   submit: [
     payload: {
       amount: number
       fullName: string
       email: string
+      store: StoreInfo | null
     },
   ]
 }>()
@@ -24,9 +31,31 @@ const form = reactive({
   store: '',
 })
 
+const storeSelect = ref<HTMLSelectElement | null>(null)
+const storeInfo = ref<StoreInfo | null>(null)
+
+const updateStoreInfo = (event?: Event) => {
+  const select = (event?.target as HTMLSelectElement | null) ?? storeSelect.value
+  if (!select) return
+
+  const selectedOption = select.selectedOptions[0]
+  const storeName = selectedOption?.getAttribute('data-name') || ''
+  const channel = selectedOption?.getAttribute('data-channel') || ''
+  const storeId = select.value
+
+  if (storeId && storeName) {
+    storeInfo.value = { id: storeId, name: storeName, channel }
+    return
+  }
+
+  storeInfo.value = null
+}
+
 const isFormValid = computed(() => {
   const amount = Number(form.amount)
-  return Boolean(amount > 0 && form.fullName.trim().length > 0 && form.email.trim().length > 0)
+  const requiresStore = props.methodLabel.toLowerCase() === 'efectivo'
+  const hasStore = !requiresStore || Boolean(storeInfo.value)
+  return Boolean(amount > 0 && form.fullName.trim().length > 0 && form.email.trim().length > 0 && hasStore)
 })
 
 const handleSubmit = () => {
@@ -35,6 +64,7 @@ const handleSubmit = () => {
     amount: Number(form.amount || 0),
     fullName: form.fullName.trim(),
     email: form.email.trim(),
+    store: storeInfo.value,
   })
 }
 </script>
@@ -61,9 +91,9 @@ const handleSubmit = () => {
       <input v-model="form.email" required type="email" placeholder="ejemplo@email.com" />
     </label>
 
-    <label v-if="props.methodLabel === 'Efectivo'" class="field">
+    <label v-if="props.methodLabel.toLowerCase() === 'efectivo'" class="field">
       <span>🏪 Selecciona dónde pagarás</span>
-      <select v-model="form.store" required id="store" name="store">
+      <select v-model="form.store" ref="storeSelect" required id="store" name="store" @change="updateStoreInfo">
         <option value="">-- Selecciona una tienda --</option>
 
         <option disabled class="store-category">🏦 BANCOS</option>
@@ -100,7 +130,10 @@ const handleSubmit = () => {
         <option value="8178" data-name="OpenPay" data-channel="WP">OpenPay</option>
         <option value="8419" data-name="PayCash" data-channel="WP">PayCash</option>
       </select>
-      <div class="store-info" id="storeInfo"></div>
+      <div v-if="storeInfo" class="store-info" id="storeInfo" aria-live="polite">
+        <strong>{{ storeInfo.name }}</strong><br />
+        Tipo: Pago en Efectivo | Bank ID: {{ storeInfo.id }}
+      </div>
     </label>
 
     <button type="submit" class="cta" :disabled="!isFormValid || props.loading">
@@ -188,8 +221,16 @@ const handleSubmit = () => {
 }
 
 .store-info {
-  display: none;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
 }
+
+
 
 .cta {
   margin-top: 4px;

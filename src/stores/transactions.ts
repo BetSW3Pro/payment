@@ -24,9 +24,7 @@ export const useTransactionsStore = defineStore('transactions', {
       try {
         const res = await api.post('transactions',payload)
         // const res = await axios.post(url, payload)
-
         this.lastTransaction = res.data
-        console.log("a",res.data)
         return res.data.data.uuidTransaction
       } catch (err: any) {
         this.error = err?.response?.data?.message || "Error creando transacción"

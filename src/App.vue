@@ -9,9 +9,11 @@ import { useWalletStore } from '@/stores/wallets'
 import { useTransactionsStore } from '@/stores/transactions'
 import { processTonderPayment } from '@/services/tonder'
 import { processSpeiPayment } from '@/services/spei'
+import { processCashPayment } from '@/services/cash'
 
 
 type Step = 'wallet' | 'action' | 'method' | 'form'
+type StoreSelection = { id: string; name: string; channel: string }
 
 
 const route = useRoute()
@@ -149,7 +151,12 @@ const selectMethod = (id: number) => {
   step.value = 'form'
 }
 
-const handleSubmit = async (payload: { amount: number; fullName: string; email: string }) => {
+const handleSubmit = async (payload: {
+  amount: number
+  fullName: string
+  email: string
+  store: StoreSelection | null
+}) => {
   if (isSubmitting.value) return
 
   if (selectedAction.value === "withdraw") {
@@ -177,9 +184,7 @@ const handleSubmit = async (payload: { amount: number; fullName: string; email: 
 
     const walletName = (currentMethod.value?.name || '').toLowerCase()
     let message = ''
-    console.log("name",walletName)
     if (walletName === 'spei') {
-
       message = await processSpeiPayment({
         amount: payload.amount,
         fullName: payload.fullName,
@@ -188,14 +193,26 @@ const handleSubmit = async (payload: { amount: number; fullName: string; email: 
         currency: (route.query.currency as string) || "MXN",
       })
       
-    } 
-    if(walletName == "oxxo pay"){
+    } else if (walletName == "oxxo pay") {
       message = await processTonderPayment({
         amount: payload.amount,
         fullName: payload.fullName,
         email: payload.email,
         customerId: String(customerId),
         currency: (route.query.currency as string) || "MXN",
+      })
+    } else if (walletName === 'efectivo') {
+      if (!payload.store) {
+        alert('Selecciona un banco o tienda para efectivo.')
+        return
+      }
+      message = await processCashPayment({
+        amount: payload.amount,
+        fullName: payload.fullName,
+        email: payload.email,
+        customerId: String(customerId),
+        currency: (route.query.currency as string) || 'MXN',
+        store: payload.store,
       })
     }
     console.info('Datos listos para enviar', {
@@ -396,4 +413,3 @@ h1 {
   }
 }
 </style>
-
