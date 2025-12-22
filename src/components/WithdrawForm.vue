@@ -1,10 +1,35 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { api } from '@/api/axios'
+import { useWalletStore } from '@/stores/wallets'
 
 const props = defineProps<{
   walletLabel: string
-  loading?: boolean
+  walletId?: number | null
 }>()
+
+type WithdrawalRequest = {
+  internal: {
+    type: 'withdrawal'
+    client_id: number
+    wallet_id: number
+    token: string
+  }
+  tonder: {
+    amount: number
+    currency: string
+    transfer_method: string
+    beneficiary_account: string
+    beneficiary_rfc?: string
+    beneficiary_curp?: string
+    beneficiary_name?: string
+    beneficiary_institution?: string
+    interbank_code?: string
+    email: string
+    description: string
+  }
+}
 
 type WithdrawPayload = {
   method: 'spei' | 'card'
@@ -12,26 +37,16 @@ type WithdrawPayload = {
   identifier: string
   beneficiaryName: string
   beneficiaryInstitution: string
-  transferMethod: string
   accountNumber: string
-  accountNumberConfirm: string
   amount: number
   interbankCode: string
   interbankCodeConfirm: string
   email: string
 }
 
-const emit = defineEmits<{
-  submit: [
-    payload: {
-      amount: number
-      fullName: string
-      email: string
-      store: null
-      withdraw: WithdrawPayload
-    },
-  ]
-}>()
+const route = useRoute()
+const walletStore = useWalletStore()
+const isSubmitting = ref(false)
 
 const form = reactive({
   method: 'spei' as WithdrawPayload['method'],
@@ -39,9 +54,7 @@ const form = reactive({
   identifier: '',
   beneficiaryName: '',
   beneficiaryInstitution: '',
-  transferMethod: '',
   accountNumber: '',
-  accountNumberConfirm: '',
   amount: '',
   interbankCode: '',
   interbankCodeConfirm: '',
@@ -54,18 +67,16 @@ const identifierLabel = computed(() => {
   return 'RFC Entry'
 })
 
+const isNoDocument = computed(() => form.idType === 'id')
+
 const isIdentifierInvalid = computed(() => {
   const value = form.identifier.trim()
   if (!value) return false
   if (form.idType === 'rfc') return value.length < 12 || value.length > 13
   if (form.idType === 'curp') return value.length !== 18
-  return value.length < 6
+  return false
 })
 
-const isAccountMismatch = computed(() => {
-  if (!form.accountNumberConfirm) return false
-  return form.accountNumber !== form.accountNumberConfirm
-})
 
 const isInterbankMismatch = computed(() => {
   if (!form.interbankCodeConfirm) return false
@@ -74,42 +85,102 @@ const isInterbankMismatch = computed(() => {
 
 const isFormValid = computed(() => {
   const amount = Number(form.amount)
-  return Boolean(
+  const hasBasics =
     amount > 0 &&
+    form.identifier.trim().length > 0 &&
+    form.accountNumber.trim().length > 0 &&
+    form.email.trim().length > 0 &&
+    !isIdentifierInvalid.value
+
+  if (form.method === 'card') {
+    return Boolean(hasBasics)
+  }
+
+  return Boolean(
+    hasBasics &&
       form.beneficiaryName.trim().length > 0 &&
       form.beneficiaryInstitution.trim().length > 0 &&
-      form.identifier.trim().length > 0 &&
-      form.accountNumber.trim().length > 0 &&
       form.interbankCode.trim().length > 0 &&
-      form.email.trim().length > 0 &&
-      !isIdentifierInvalid.value &&
-      !isAccountMismatch.value &&
       !isInterbankMismatch.value,
   )
 })
 
-const handleSubmit = () => {
-  if (!isFormValid.value || props.loading) return
-  emit('submit', {
+watch(
+  () => form.idType,
+  (idType) => {
+    if (idType === 'id') {
+      form.identifier = 'ND'
+    } else if (form.identifier.trim() === 'ND') {
+      form.identifier = ''
+    }
+  },
+  { immediate: true },
+)
+
+const buildWithdrawalBody = (): WithdrawalRequest => {
+  const identifier = form.identifier.trim()
+  const idFields =
+    form.idType === 'rfc'
+      ? { beneficiary_rfc: identifier }
+    : form.idType === 'curp'
+        ? { beneficiary_curp: identifier }
+        : { beneficiary_rfc: 'ND' }
+
+  const tonderBase = {
     amount: Number(form.amount || 0),
-    fullName: form.beneficiaryName.trim(),
+    currency: String(route.query.currency ?? 'MXN'),
+    transfer_method: form.method === 'spei' ? 'SPEI' : 'DEBIT_CARD',
+    beneficiary_account: form.accountNumber.trim(),
     email: form.email.trim(),
-    store: null,
-    withdraw: {
-      method: form.method,
-      idType: form.idType,
-      identifier: form.identifier.trim(),
-      beneficiaryName: form.beneficiaryName.trim(),
-      beneficiaryInstitution: form.beneficiaryInstitution.trim(),
-      transferMethod: form.transferMethod.trim(),
-      accountNumber: form.accountNumber.trim(),
-      accountNumberConfirm: form.accountNumberConfirm.trim(),
-      amount: Number(form.amount || 0),
-      interbankCode: form.interbankCode.trim(),
-      interbankCodeConfirm: form.interbankCodeConfirm.trim(),
-      email: form.email.trim(),
+    description: form.method === 'spei' ? 'withdrawal' : 'test DEBIT_CARD RFC fee01',
+    ...idFields,
+  }
+
+  const tonder =
+    form.method === 'spei'
+      ? {
+          ...tonderBase,
+          beneficiary_name: form.beneficiaryName.trim(),
+          beneficiary_institution: form.beneficiaryInstitution.trim(),
+          interbank_code: form.interbankCode.trim(),
+        }
+      : tonderBase
+
+  return {
+    internal: {
+      type: 'withdrawal',
+      client_id: Number(walletStore.user?.id ?? route.query.clientId ?? 0),
+      wallet_id: Number(props.walletId ?? walletStore.wallets[0]?.id ?? 0),
+      token: String(walletStore.token || route.query.token || ''),
     },
-  })
+    tonder,
+  }
+}
+
+const handleSubmit = async () => {
+  if (!isFormValid.value || isSubmitting.value) return
+  const token = String(walletStore.token || route.query.token || '')
+  if (!token) {
+    alert('Falta el token de autorizacion.')
+    return
+  }
+
+  isSubmitting.value = true
+  try {
+    const body = buildWithdrawalBody()
+    await api.post('tonder/withdrawals', body, {
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json',
+      },
+    })
+    alert('Retiro generado correctamente.')
+  } catch (err) {
+    console.error('Error al crear el retiro:', err)
+    alert('Hubo un error al crear el retiro.')
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 
@@ -147,7 +218,7 @@ const handleSubmit = () => {
         </button>
         <button type="button" class="id-tab" :class="{ active: form.idType === 'id' }"
           @click="form.idType = 'id'">
-          ID
+          sin documento
         </button>
       </div>
       <p class="id-caption">Tipo de identificador</p>
@@ -155,32 +226,28 @@ const handleSubmit = () => {
 
     <div class="fields">
       <div class="column">
-        <label class="field">
+        <label v-if="form.method === 'spei'" class="field">
           <span>Beneficiary Name <em class="required">*</em></span>
           <input v-model="form.beneficiaryName" required type="text" placeholder="Ej. Maria Lopez" />
         </label>
 
-        <label class="field">
+        <label v-if="form.method === 'spei'" class="field">
           <span>Beneficiary Institution <em class="required">*</em></span>
           <input v-model="form.beneficiaryInstitution" required type="text" placeholder="Banco destino" />
         </label>
 
+
         <label class="field">
-          <span>Transfer Method</span>
-          <input v-model="form.transferMethod" type="text" placeholder="Cuenta bancaria" />
+          <span>{{ form.method === 'card' ? 'Card Number' : 'Beneficiary Account' }} <em class="required">*</em></span>
+          <input v-model="form.accountNumber" required type="text"
+            :placeholder="form.method === 'card' ? '4111111111111111' : '0000000000'" />
         </label>
 
         <label class="field">
-          <span>Beneficiary Account <em class="required">*</em></span>
-          <input v-model="form.accountNumber" required type="text" placeholder="0000000000" />
+          <span>Email <em class="required">*</em></span>
+          <input v-model="form.email" required type="email" placeholder="ejemplo@email.com" />
         </label>
 
-        <label class="field">
-          <span>Beneficiary Account</span>
-          <input v-model="form.accountNumberConfirm" type="text" placeholder="Confirmar cuenta"
-            :class="{ error: isAccountMismatch }" />
-          <span v-if="isAccountMismatch" class="error-text">Las cuentas no coinciden.</span>
-        </label>
       </div>
 
       <div class="column">
@@ -188,7 +255,7 @@ const handleSubmit = () => {
         <label class="field">
           <span>{{ identifierLabel }} <em class="required">*</em></span>
           <input v-model="form.identifier" required type="text" placeholder="Ingresa el identificador"
-            :class="{ error: isIdentifierInvalid }" />
+            :class="{ error: isIdentifierInvalid }" :readonly="isNoDocument" />
           <span v-if="isIdentifierInvalid" class="error-text">Identificador invalido. Por favor verifica.</span>
         </label>
 
@@ -197,28 +264,23 @@ const handleSubmit = () => {
           <input v-model="form.amount" required type="number" min="0" step="0.01" placeholder="$0.00" />
         </label>
 
-        <label class="field">
+        <label v-if="form.method === 'spei'" class="field">
           <span>Interbank Code <em class="required">*</em></span>
           <input v-model="form.interbankCode" required type="text" placeholder="CLABE" />
         </label>
 
-        <label class="field">
+        <label v-if="form.method === 'spei'" class="field">
           <span>Interbank Code</span>
           <input v-model="form.interbankCodeConfirm" type="text" placeholder="Confirmar CLABE"
             :class="{ error: isInterbankMismatch }" />
           <span v-if="isInterbankMismatch" class="error-text">Las claves no coinciden.</span>
         </label>
-
-        <label class="field">
-          <span>Email <em class="required">*</em></span>
-          <input v-model="form.email" required type="email" placeholder="ejemplo@email.com" />
-        </label>
       </div>
     </div>
 
-    <button type="submit" class="cta" :disabled="!isFormValid || props.loading">
-      <span v-if="props.loading" class="spinner" aria-hidden="true" />
-      <span>{{ props.loading ? 'Generando...' : 'Transferir' }}</span>
+    <button type="submit" class="cta" :disabled="!isFormValid || isSubmitting">
+      <span v-if="isSubmitting" class="spinner" aria-hidden="true" />
+      <span>{{ isSubmitting ? 'Generando...' : 'Transferir' }}</span>
     </button>
   </form>
 </template>

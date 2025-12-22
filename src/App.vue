@@ -15,15 +15,6 @@ import { processCashPayment } from '@/services/cash'
 
 type Step = 'wallet' | 'action' | 'method' | 'form'
 type StoreSelection = { id: string; name: string; channel: string }
-type WithdrawFormPayload = {
-  amount: number
-  fullName: string
-  email: string
-  store: null
-  withdraw: Record<string, string | number>
-}
-
-
 const route = useRoute()
 const walletStore = useWalletStore()
 const transactions = useTransactionsStore()
@@ -235,11 +226,6 @@ const handleSubmit = async (payload: {
   }
 }
 
-const handleWithdrawSubmit = (payload: WithdrawFormPayload) => {
-  if (isSubmitting.value) return
-  console.info('Datos de retiro listos para enviar:', payload)
-  alert('El flujo de retiro aun no esta implementado.')
-}
 </script>
 
 <template>
@@ -273,7 +259,7 @@ const handleWithdrawSubmit = (payload: WithdrawFormPayload) => {
           @select="selectMethod" />
 
         <WithdrawForm v-else-if="step === 'form' && selectedAction === 'withdraw'"
-          :wallet-label="currentWallet?.name ?? 'Billetera'" :loading="isSubmitting" @submit="handleWithdrawSubmit" />
+          :wallet-label="currentWallet?.name ?? 'Billetera'" :wallet-id="selectedWallet" />
 
         <PaymentForm v-else-if="step === 'form'" :method-label="methodLabel"
           :wallet-label="currentWallet?.name ?? 'Billetera'" :loading="isSubmitting" @submit="handleSubmit" />
