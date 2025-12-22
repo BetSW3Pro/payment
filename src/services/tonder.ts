@@ -106,10 +106,11 @@ declare global {
   }
 }
 
+const PAYMENT_SUCCESS_PATH = '/payment-success'
 const TONDER_CONFIG = {
   mode: 'stage',
   apiKey: '1cccb499af3ad62bfb10a6efab1b07910b0bc39b',
-  returnUrl: 'https://tonder.live/customer/sdklite-migallo/',
+  returnUrl: new URL(PAYMENT_SUCCESS_PATH, window.location.origin).toString(),
 }
 
 const PAYMENT_METHOD_MAP: Record<PaymentMethodId, string> = {
@@ -312,4 +313,3 @@ export const processTonderPayment = async (params: {
   const response = await checkout.payment(payload)
   return handlePaymentResponse(response)
 }
-

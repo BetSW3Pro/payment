@@ -119,10 +119,11 @@ type LiteInlineCheckoutCtor = new (config: {
   callBack?: (response: CashPaymentResponse) => void
 }) => LiteInlineCheckout
 
+const PAYMENT_SUCCESS_PATH = '/payment-success'
 const TONDER_CONFIG = {
   mode: 'stage',
   apiKey: '1cccb499af3ad62bfb10a6efab1b07910b0bc39b',
-  returnUrl: window.location.href,
+  returnUrl: new URL(PAYMENT_SUCCESS_PATH, window.location.origin).toString(),
   businessId: 21,
 }
 

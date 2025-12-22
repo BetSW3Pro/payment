@@ -24,9 +24,11 @@ type WithdrawalRequest = {
     beneficiary_rfc?: string
     beneficiary_curp?: string
     beneficiary_name?: string
+    beneficiary_last_name?: string
     beneficiary_institution?: string
     interbank_code?: string
     email: string
+    phone?: string
     description: string
   }
 }
@@ -36,29 +38,35 @@ type WithdrawPayload = {
   idType: 'rfc' | 'curp' | 'id'
   identifier: string
   beneficiaryName: string
+  beneficiaryLastName: string
   beneficiaryInstitution: string
   accountNumber: string
   amount: number
   interbankCode: string
   interbankCodeConfirm: string
   email: string
+  phone: string
 }
 
 const route = useRoute()
 const walletStore = useWalletStore()
 const isSubmitting = ref(false)
+const submitStatus = ref<'idle' | 'success' | 'error'>('idle')
+const submitMessage = ref('')
 
 const form = reactive({
   method: 'spei' as WithdrawPayload['method'],
   idType: 'rfc' as WithdrawPayload['idType'],
   identifier: '',
   beneficiaryName: '',
+  beneficiaryLastName: '',
   beneficiaryInstitution: '',
   accountNumber: '',
   amount: '',
   interbankCode: '',
   interbankCodeConfirm: '',
   email: '',
+  phone: '',
 })
 
 const identifierLabel = computed(() => {
@@ -93,13 +101,19 @@ const isFormValid = computed(() => {
     !isIdentifierInvalid.value
 
   if (form.method === 'card') {
-    return Boolean(hasBasics)
+    return Boolean(
+      hasBasics &&
+        form.beneficiaryName.trim().length > 0 &&
+        form.interbankCode.trim().length > 0,
+    )
   }
 
   return Boolean(
     hasBasics &&
       form.beneficiaryName.trim().length > 0 &&
+      form.beneficiaryLastName.trim().length > 0 &&
       form.beneficiaryInstitution.trim().length > 0 &&
+      form.phone.trim().length > 0 &&
       form.interbankCode.trim().length > 0 &&
       !isInterbankMismatch.value,
   )
@@ -131,6 +145,8 @@ const buildWithdrawalBody = (): WithdrawalRequest => {
     currency: String(route.query.currency ?? 'MXN'),
     transfer_method: form.method === 'spei' ? 'SPEI' : 'DEBIT_CARD',
     beneficiary_account: form.accountNumber.trim(),
+    beneficiary_name: form.beneficiaryName.trim(),
+    interbank_code: form.interbankCode.trim(),
     email: form.email.trim(),
     description: form.method === 'spei' ? 'withdrawal' : 'test DEBIT_CARD RFC fee01',
     ...idFields,
@@ -140,9 +156,9 @@ const buildWithdrawalBody = (): WithdrawalRequest => {
     form.method === 'spei'
       ? {
           ...tonderBase,
-          beneficiary_name: form.beneficiaryName.trim(),
+          beneficiary_last_name: form.beneficiaryLastName.trim(),
           beneficiary_institution: form.beneficiaryInstitution.trim(),
-          interbank_code: form.interbankCode.trim(),
+          phone: form.phone.trim(),
         }
       : tonderBase
 
@@ -161,11 +177,14 @@ const handleSubmit = async () => {
   if (!isFormValid.value || isSubmitting.value) return
   const token = String(walletStore.token || route.query.token || '')
   if (!token) {
-    alert('Falta el token de autorizacion.')
+    submitStatus.value = 'error'
+    submitMessage.value = 'Falta el token de autorizacion.'
     return
   }
 
   isSubmitting.value = true
+  submitStatus.value = 'idle'
+  submitMessage.value = ''
   try {
     const body = buildWithdrawalBody()
     await api.post('tonder/withdrawals', body, {
@@ -174,10 +193,12 @@ const handleSubmit = async () => {
         'Content-Type': 'application/json',
       },
     })
-    alert('Retiro generado correctamente.')
+    submitStatus.value = 'success'
+    submitMessage.value = 'Transferencia generada correctamente.'
   } catch (err) {
     console.error('Error al crear el retiro:', err)
-    alert('Hubo un error al crear el retiro.')
+    submitStatus.value = 'error'
+    submitMessage.value = 'Hubo un error al crear el retiro.'
   } finally {
     isSubmitting.value = false
   }
@@ -226,9 +247,14 @@ const handleSubmit = async () => {
 
     <div class="fields">
       <div class="column">
-        <label v-if="form.method === 'spei'" class="field">
+        <label class="field">
           <span>Beneficiary Name <em class="required">*</em></span>
           <input v-model="form.beneficiaryName" required type="text" placeholder="Ej. Maria Lopez" />
+        </label>
+
+        <label v-if="form.method === 'spei'" class="field">
+          <span>Beneficiary Last Name <em class="required">*</em></span>
+          <input v-model="form.beneficiaryLastName" required type="text" placeholder="Ej. Garcia" />
         </label>
 
         <label v-if="form.method === 'spei'" class="field">
@@ -248,6 +274,11 @@ const handleSubmit = async () => {
           <input v-model="form.email" required type="email" placeholder="ejemplo@email.com" />
         </label>
 
+        <label v-if="form.method === 'spei'" class="field">
+          <span>Phone <em class="required">*</em></span>
+          <input v-model="form.phone" required type="tel" placeholder="5512345678" />
+        </label>
+
       </div>
 
       <div class="column">
@@ -264,7 +295,7 @@ const handleSubmit = async () => {
           <input v-model="form.amount" required type="number" min="0" step="0.01" placeholder="$0.00" />
         </label>
 
-        <label v-if="form.method === 'spei'" class="field">
+        <label class="field">
           <span>Interbank Code <em class="required">*</em></span>
           <input v-model="form.interbankCode" required type="text" placeholder="CLABE" />
         </label>
@@ -277,6 +308,18 @@ const handleSubmit = async () => {
         </label>
       </div>
     </div>
+
+    <p v-if="submitStatus !== 'idle'" class="submit-message" :class="submitStatus">
+      <span class="status-icon" aria-hidden="true">
+        <svg v-if="submitStatus === 'success'" viewBox="0 0 24 24" role="img" focusable="false">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+        <svg v-else viewBox="0 0 24 24" role="img" focusable="false">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </span>
+      <span class="status-text">{{ submitMessage }}</span>
+    </p>
 
     <button type="submit" class="cta" :disabled="!isFormValid || isSubmitting">
       <span v-if="isSubmitting" class="spinner" aria-hidden="true" />
@@ -522,6 +565,61 @@ const handleSubmit = async () => {
   to {
     transform: rotate(360deg);
   }
+}
+
+.submit-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.submit-message.success {
+  color: #0f5132;
+  background: #d1e7dd;
+  border: 1px solid #badbcc;
+}
+
+.submit-message.error {
+  color: #842029;
+  background: #f8d7da;
+  border: 1px solid #f5c2c7;
+}
+
+.status-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.submit-message.success .status-icon {
+  background: #0f5132;
+}
+
+.submit-message.error .status-icon {
+  background: #842029;
+}
+
+.status-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke: #fff;
+  stroke-width: 2.4;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.status-text {
+  line-height: 1.4;
 }
 
 @media (max-width: 760px) {

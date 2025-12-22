@@ -8,6 +8,10 @@ const router = createRouter({
       path: "/",
       component: { template: "<div />" },
     },
+    {
+      path: "/payment-success",
+      component: { template: "<div />" },
+    },
   ],
 });
 

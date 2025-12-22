@@ -46,10 +46,11 @@ const loadExternalScripts = async () => {
 }
 
 
+const PAYMENT_SUCCESS_PATH = '/payment-success'
 const TONDER_CONFIG = {
   mode: 'stage',
   apiKey: '1cccb499af3ad62bfb10a6efab1b07910b0bc39b',
-  returnUrl: 'https://tonder.live/customer/sdklite-migallo/',
+  returnUrl: new URL(PAYMENT_SUCCESS_PATH, window.location.origin).toString(),
 }
 
 let liteCheckout: LiteInlineCheckout | null = null

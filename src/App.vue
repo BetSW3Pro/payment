@@ -2,6 +2,7 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import ActionSelect from './components/ActionSelect.vue'
 import PaymentForm from './components/PaymentForm.vue'
+import PaymentSuccess from './components/PaymentSuccess.vue'
 import WithdrawForm from './components/WithdrawForm.vue'
 import PaymentMethodSelect from './components/PaymentMethodSelect.vue'
 import WalletSelect from './components/WalletSelect.vue'
@@ -123,6 +124,9 @@ const resolveTonderMethodId = () => {
 
 const stepPosition = computed(() => stepOrder.value.indexOf(step.value) + 1)
 const totalSteps = computed(() => stepOrder.value.length)
+const showPaymentSuccess = computed(
+  () => route.path === '/payment-success' || route.query.paymentStatus === 'success'
+)
 
 const goPrevStep = () => {
   const idx = stepOrder.value.indexOf(step.value)
@@ -235,35 +239,38 @@ const handleSubmit = async (payload: {
       <div class="blob blob-blue" />
     </div>
     <section class="card">
-      <div class="header">
-        <div>
-          <div class="title-row">
-            <button v-if="stepPosition > 1" type="button" class="circle-btn" aria-label="Volver" @click="goPrevStep">
-              <span>&lt;</span>
-            </button>
-            <p class="eyebrow">Paralela de pagos</p>
+      <PaymentSuccess v-if="showPaymentSuccess" />
+      <template v-else>
+        <div class="header">
+          <div>
+            <div class="title-row">
+              <button v-if="stepPosition > 1" type="button" class="circle-btn" aria-label="Volver" @click="goPrevStep">
+                <span>&lt;</span>
+              </button>
+              <p class="eyebrow">Paralela de pagos</p>
+            </div>
+            <h1>{{ stepTitle }}</h1>
           </div>
-          <h1>{{ stepTitle }}</h1>
+          <p class="step">Paso {{ stepPosition }} de {{ totalSteps }}</p>
         </div>
-        <p class="step">Paso {{ stepPosition }} de {{ totalSteps }}</p>
-      </div>
 
-      <div class="content">
-        <WalletSelect v-if="step === 'wallet'" :wallets="storeWallets" :selected-id="selectedWallet"
-          @select="selectWallet" />
+        <div class="content">
+          <WalletSelect v-if="step === 'wallet'" :wallets="storeWallets" :selected-id="selectedWallet"
+            @select="selectWallet" />
 
-        <ActionSelect v-else-if="step === 'action'" :actions="actions" :selected-id="selectedAction"
-          @select="selectAction" />
+          <ActionSelect v-else-if="step === 'action'" :actions="actions" :selected-id="selectedAction"
+            @select="selectAction" />
 
-        <PaymentMethodSelect v-else-if="step === 'method'" :methods="storeMethods" :selected-id="selectedMethod"
-          @select="selectMethod" />
+          <PaymentMethodSelect v-else-if="step === 'method'" :methods="storeMethods" :selected-id="selectedMethod"
+            @select="selectMethod" />
 
-        <WithdrawForm v-else-if="step === 'form' && selectedAction === 'withdraw'"
-          :wallet-label="currentWallet?.name ?? 'Billetera'" :wallet-id="selectedWallet" />
+          <WithdrawForm v-else-if="step === 'form' && selectedAction === 'withdraw'"
+            :wallet-label="currentWallet?.name ?? 'Billetera'" :wallet-id="selectedWallet" />
 
-        <PaymentForm v-else-if="step === 'form'" :method-label="methodLabel"
-          :wallet-label="currentWallet?.name ?? 'Billetera'" :loading="isSubmitting" @submit="handleSubmit" />
-      </div>
+          <PaymentForm v-else-if="step === 'form'" :method-label="methodLabel"
+            :wallet-label="currentWallet?.name ?? 'Billetera'" :loading="isSubmitting" @submit="handleSubmit" />
+        </div>
+      </template>
     </section>
   </main>
 </template>
